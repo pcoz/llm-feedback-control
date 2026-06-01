@@ -46,18 +46,17 @@ that matters most: a system willing to say no is what makes the rest worth trust
 The library pulls structured information out of free text, and it ships with two
 kinds of extraction built in.
 
-The first is **workflow extraction** (`run_audit`). Give it a process written in
-prose — "a claim enters Intake, then goes to Triage; from Triage it is either
-fast-tracked or sent to Investigation…" — and it returns the underlying state
-machine, together with the facts that can be *proved* about it: which steps are dead
-ends, which can never be reached, and where the loops are.
-
-The second is **form-field extraction** (`extract_form`). Give it a document and a
-list of the fields you want — a name, an email, a policy number, an amount — and it
-returns those fields filled in, but only after checking each value against the source
-text. If the model invents a value the document doesn't contain, the loop catches it
-and recovers the real one; if a required field is genuinely absent, the loop refuses
-rather than making one up.
+- **Workflow extraction** (`run_audit`). Give it a process written in prose — "a
+  claim enters Intake, then goes to Triage; from Triage it is either fast-tracked or
+  sent to Investigation…" — and it returns the underlying state machine, together
+  with the facts that can be *proved* about it: which steps are dead ends, which can
+  never be reached, and where the loops are.
+- **Form-field extraction** (`extract_form`). Give it a document and a list of the
+  fields you want — a name, an email, a policy number, an amount — and it returns
+  those fields filled in, but only after checking each value against the source text.
+  If the model invents a value the document doesn't contain, the loop catches it and
+  recovers the real one; if a required field is genuinely absent, the loop refuses
+  rather than making one up.
 
 You are not limited to those two. The loop is public, so you can add your own kind of
 extraction by giving it the shape you want back and a way to check it. And where there
