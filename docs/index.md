@@ -1,7 +1,5 @@
 # LLM Feedback Control — User Manual
 
-## The problem: confident hallucination, and what this does about it
-
 Large language models are remarkably good at reading English and producing fluent,
 structured-looking output. They are also unreliable in a specific and costly way:
 when you ask one to extract structure from text — the steps of a process, the fields
