@@ -15,10 +15,10 @@ feedback loop** — plain code that checks the model's output against provable f
 fills the gaps by re-asking, and **refuses** when it can't be sure. The result is
 structured output you can audit, from a model small enough to run on a laptop.
 
-The package ships one fully-worked instantiation — **workflow / state-machine
-extraction** — but the engine is general: it works for any target you can pair with
-a schema and a deterministic reference (form fields, records, entities). See
-[architecture.md §7](architecture.md#7-generalising-beyond-workflows).
+It's one engine pointed at different targets: a target is anything you can pair with
+a schema and a deterministic reference. **Workflow / state-machine extraction is the
+first target shipped**; form fields, records, and entities are others the same loop
+handles. See [architecture.md §7](architecture.md#7-the-general-engine).
 
 ## A 60-second tour
 

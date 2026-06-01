@@ -20,47 +20,52 @@ most of it right, then quietly invent a step that isn't there, or drop one that 
 For anything you actually need to rely on, "usually right, never tells you when it
 isn't" is not good enough.
 
-This library fixes that for a whole class of jobs: **turning free text into
-structured data you can trust.** The version you `pip install` today ships one
-fully-worked, measured example — turning a described *process* into a state machine —
-and the same engine generalises to other targets (form fields, records, entities);
-see [Extending to other targets](#extending-to-other-targets). It works by pairing
-the language model with ordinary, deterministic code that:
+This library fixes that. It turns free text into **structured data you can trust**,
+by pairing the language model with a deterministic **reference** — real checking
+code, suited to whatever you're extracting — and running a feedback loop that does
+three things:
 
-- **double-checks** the model's answer against provable facts,
-- **fills in** anything the model missed, by asking again with the gaps pointed out,
-- and, crucially, **says "I'm not sure" instead of guessing** when it can't verify
-  the result.
+- **verifies** the model's answer against that reference (provable facts, a schema,
+  known patterns — whatever fits the target);
+- **fills in** what the model missed, by re-asking with the specific gaps pointed out;
+- **refuses** — says "I'm not sure" — when it can't verify the result, instead of
+  guessing.
 
-The payoff: a *small* model you can run for free on your own laptop becomes
-reliable enough to use, because the **checking** — not the model's size — is doing
-the heavy lifting. (In our tests a 3.8B model wrapped this way matches a model about
-seven times larger; see [results](#whats-measured-so-far).)
+The payoff: a *small* model you can run for free on your own laptop becomes reliable
+enough to use, because the **checking** — not the model's size — does the heavy
+lifting. (In our tests a 3.8B model wrapped this way matches a model about seven
+times larger; see [results](#whats-measured-so-far).)
 
-**Use it to:**
+## What you can extract
 
-- **extract a trustworthy state machine** (states + transitions) from a process
-  described in plain prose;
-- **audit a process** for dead ends, unreachable steps, and loops — with every
-  finding backed by a check, not a guess;
-- **get reliable structured output from a small, free, local model** instead of
-  paying for a giant model or a cloud API;
-- **know when to stop trusting the model** — it refuses input it can't analyse
-  exactly, and flags incomplete results, rather than inventing answers.
+It's **one engine pointed at different targets.** A target is anything you can pair
+with a schema and a deterministic check — workflow is just the first one shipped:
 
-**Who it's for:** anyone who needs dependable structured output — workflow and
-state-machine extraction, process auditing, config parsing — from a language model,
-without paying for a giant model or a cloud API, and without silently trusting a
-guess.
+- **workflows / processes → state machines** — *ships today*: states, transitions,
+  dead ends, unreachable steps, loops;
+- **form fields** (invoices, applications, claims) against a field schema + format
+  and required-field rules — *prototyped on the same loop*;
+- **records / tables** against a known column set and types;
+- **entities & relations** against a gazetteer or pattern set;
+- **configs / specs** against a schema or grammar.
+
+The piece that changes between targets is the **reference** — the checking code
+(graph analysis, a field schema with validators, a pattern set). That's the
+substantive part, and it's what decides whether the engine helps: where you can
+write a cheap, independent check, the payoff is large. Where there *is* no such
+check (open-ended summarising, sentiment, theme-finding), the engine **refuses to
+claim exactness** — by design. See [Adding a new target](#adding-a-new-target).
+
+**Who it's for:** anyone who needs dependable structured output from a language
+model without paying for a giant model or a cloud API, and without silently trusting
+a guess.
 
 If you just want to try it, jump to [Quickstart](#quickstart-works-with-no-model).
-To see exactly what it produces, read on.
 
-## What it actually does
+## What it does, concretely (worked example: workflow extraction)
 
-The package ships one fully-worked instantiation — **workflow / process
-extraction** — which is the running example throughout. You hand it a process
-written in plain English:
+To make the loop concrete, here it is on the target that ships today. You hand it a
+process written in plain English:
 
 > "A claim enters Intake. From Intake it goes to Triage. Triage goes to FastTrack
 > or to Investigation. FastTrack goes to Payout. Investigation goes to Payout or
@@ -236,41 +241,28 @@ tests/                      deterministic tests (no model / no network)
 - **Results are indicative.** Small corpora; treat the numbers as direction, not
   guarantees.
 
-## Extending to other targets
+## Adding a new target
 
-Workflow extraction is the *worked example*, not the limit. Underneath it is a
-general engine for reliable structured extraction:
+Only two things change between targets; the rest — the loop, the gap-filling, the
+refusal clamp, the LLM backend — is shared:
 
-> extract with the LLM → **check the result against a deterministic reference** →
-> re-ask to fill the gaps → **refuse** when it can't be verified.
+1. **a target schema** — the shape you want out;
+2. **a deterministic reference** — model-free code that, given the text and a
+   candidate answer, reports what's missing or wrong. For the shipped workflow
+   target that's "does the extracted graph cover every state the text mentions?".
 
-To point it at a new kind of target you supply two things:
+A **form-field** target built on the same loop shows how this travels: its reference
+is a field schema plus independent regex detectors (email, date, currency, phone,
+custom patterns). It **verifies each value against the source document**, **recovers**
+a value the model hallucinated by reading it back out of the text, and **refuses**
+when a required field is genuinely absent — the same three behaviours as the workflow
+auditor, with a different reference. (Constrained-decoding libraries guarantee output
+*shape* but not *truth*; cloud OCR doesn't check against your schema. This does both.)
+On a small local model it lifted per-field accuracy and refused correctly on a
+genuinely-missing field.
 
-1. **a target schema** — what fields/shape you want out;
-2. **a deterministic reference** — cheap code that, without the LLM, says *what's
-   missing or wrong*. This is the part that makes the loop converge, and it's the
-   part that decides whether the engine helps: **it pays off exactly where you can
-   write such a reference.**
-
-For the shipped workflow instantiation, the reference is "does the graph cover
-every state the text mentions?". Swap it and the same loop handles other targets:
-
-- **form fields** (against a field schema + format/required-field rules),
-- **records / tables** (against a known column set + types),
-- **entities / relations** (against a gazetteer or pattern set),
-- **configs / specs** (against a schema or grammar).
-
-This isn't hypothetical: a **form-field** instantiation has been prototyped on the
-same loop, with the reference being a field schema plus independent regex detectors
-(email, date, currency, phone, custom patterns). It does what constrained-decoding
-libraries (which guarantee output *shape* but not *truth*) and cloud OCR do not:
-it **verifies each value against the source text**, **recovers** a value the model
-hallucinated by reading it back out of the document, and **refuses** when a required
-field is genuinely absent rather than inventing one. On a small local model it
-lifted per-field accuracy and refused correctly on a missing-field case.
-
-Where no deterministic reference exists (open-ended summarising, sentiment, theme
-extraction), the engine **refuses to claim exactness** — by design, not by accident.
+The LLM backend is already injectable (`generate=`); making the reference and
+extractor injectable too is the clean path to shipping more targets.
 
 ## Origin
 

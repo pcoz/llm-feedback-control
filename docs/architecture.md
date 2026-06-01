@@ -171,12 +171,13 @@ instrument.
   state machines, configs — where a deterministic reference exists. Where there's
   nothing to check against, the gate correctly refuses to claim exactness.
 
-## 7. Generalising beyond workflows
+## 7. The general engine
 
-Nothing in §§3–5 is specific to state machines. The gate, the schema-validated
-extraction, the gap-filling loop, and the refusal clamp are all general; only the
-**extraction target** and the **deterministic reference** are workflow-specific in
-the shipped instantiation.
+Everything in §§3–5 — the gate, the schema-validated extraction, the gap-filling
+loop, and the refusal clamp — is general. Two pieces are chosen per target: the
+**extraction target** (the shape you want out) and the **deterministic reference**
+(the check the loop converges against). The shipped instantiation fills those two in
+for state machines; any other target fills them in differently.
 
 Point the engine at a new target by supplying two things:
 
