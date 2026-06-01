@@ -34,9 +34,21 @@ reliable enough to use, because the **checking** — not the model's size — is
 the heavy lifting. (In our tests a 3.8B model wrapped this way matches a model about
 seven times larger; see [results](#whats-measured-so-far).)
 
+**Use it to:**
+
+- **extract a trustworthy state machine** (states + transitions) from a process
+  described in plain prose;
+- **audit a process** for dead ends, unreachable steps, and loops — with every
+  finding backed by a check, not a guess;
+- **get reliable structured output from a small, free, local model** instead of
+  paying for a giant model or a cloud API;
+- **know when to stop trusting the model** — it refuses input it can't analyse
+  exactly, and flags incomplete results, rather than inventing answers.
+
 **Who it's for:** anyone who needs dependable structured output — workflow and
-state-machine extraction, process auditing, config parsing — from an LLM, without
-paying for a giant model or a cloud API, and without silently trusting a guess.
+state-machine extraction, process auditing, config parsing — from a language model,
+without paying for a giant model or a cloud API, and without silently trusting a
+guess.
 
 If you just want to try it, jump to [Quickstart](#quickstart-works-with-no-model).
 To see exactly what it produces, read on.

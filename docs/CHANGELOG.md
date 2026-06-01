@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1] — 2026-06-01
+
+Documentation / packaging only — no code changes.
+
+- README rewritten to be human-readable and goal-oriented: a plain-language
+  "The problem this solves" opening (no prior LLM context assumed) and a concrete
+  "Use it to:" outcomes list, so the PyPI page reads as *what you can achieve*
+  rather than how it works internally.
+- Moved `CHANGELOG.md` into `docs/` and fixed the project Changelog URL.
+- Removed the redundant `requirements.txt` (the core has zero dependencies;
+  `pyproject.toml` is the single source of truth).
+
 ## [0.1.0] — 2026-06-01
 
 First public release.
