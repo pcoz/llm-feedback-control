@@ -12,7 +12,7 @@ Right-sized for the scenario:
   * the small model (phi3:mini) runs here too, but it also runs fine on a
     laptop — the only reason for EC2 is the big ceiling model.
 
-Derived from the proven sker-hermit harness; adapted Java->Ollama, +S3.
+A minimal, self-contained EC2 provisioning harness (Ollama + an S3 model cache).
 
 Usage:
   pip install boto3

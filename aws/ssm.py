@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""SSM command runner for the sker-hermit EC2 instance.
+"""SSM command runner for the llm-feedback-control EC2 instance.
 
 Reads the instance ID from aws/.instance_id (saved by launch.py). Sends
 a shell command via SSM RunShellScript, polls for completion, prints
 stdout/stderr. No SSH key needed — SSM uses IAM-backed authentication.
 
 Usage:
-    python aws/ssm.py "tail -20 /var/log/sker-hermit-setup.log"
-    python aws/ssm.py --timeout 300 "bash /home/ubuntu/clone_and_setup.sh"
+    python aws/ssm.py "tail -30 /var/log/llm-fbc-setup.log"
+    python aws/ssm.py --timeout 1800 "bash /home/ubuntu/setup.sh"
     python aws/ssm.py --check <command-id>
-    python aws/ssm.py --tail /home/ubuntu/foo.log
+    python aws/ssm.py --tail /var/log/llm-fbc-setup.log
 """
 
 import boto3
