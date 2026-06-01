@@ -1,6 +1,6 @@
 # LLM Feedback Control — User Manual
 
-## What this is
+## The problem: confident hallucination, and what this does about it
 
 Large language models are remarkably good at reading English and producing fluent,
 structured-looking output. They are also unreliable in a specific and costly way:
@@ -23,11 +23,13 @@ way, becomes dependable enough to use in earnest. In our own tests a
 3.8-billion-parameter model inside the loop matched the output of a model roughly
 seven times its size.
 
-## The idea, in one analogy
+## How it works: wrapping the model in a feedback loop
 
-The design is borrowed from electronics, and the name is meant literally. A raw
-language model behaves like a very high-gain amplifier: enormously powerful, but left
-to run "open-loop" it overshoots — fluent, yet drifting and fabricating. The classic
+The project's name is literal. "Feedback control" is a real technique from control
+engineering and electronics, and this library wraps one around a language model.
+
+A raw language model behaves like a very high-gain amplifier: enormously powerful, but
+left to run "open-loop" it overshoots — fluent, yet drifting and fabricating. The classic
 engineering fix is *feedback*: take the output, compare it against a stable reference,
 and feed the difference back in. You give up a little raw gain and you get back
 precision, stability, and predictability. This library is that feedback loop, built
@@ -41,31 +43,30 @@ the specific gaps pointed out. And it **refuses** — says, in effect, "I cannot
 for this" — whenever it cannot verify the result. That third behaviour is the one
 that matters most: a system willing to say no is what makes the rest worth trusting.
 
-## One engine, many targets
+## What it extracts
 
-Although a particular job is built in, the engine underneath is general. A *target*
-is anything you can describe with a schema and check with a piece of deterministic
-code, and two targets ship today.
+The library pulls structured information out of free text, and it ships with two
+kinds of extraction built in.
 
 The first is **workflow extraction** (`run_audit`). Give it a process written in
 prose — "a claim enters Intake, then goes to Triage; from Triage it is either
 fast-tracked or sent to Investigation…" — and it returns the underlying state
-machine together with the facts that can be *proved* about it: which steps are dead
+machine, together with the facts that can be *proved* about it: which steps are dead
 ends, which can never be reached, and where the loops are.
 
 The second is **form-field extraction** (`extract_form`). Give it a document and a
-field schema and it returns the filled-in fields — but only after checking each value
-against the source text. If the model hallucinates a value the document does not
-contain, the loop catches it and recovers the real one; if a required field is
-genuinely absent, the loop refuses rather than fabricating it.
+list of the fields you want — a name, an email, a policy number, an amount — and it
+returns those fields filled in, but only after checking each value against the source
+text. If the model invents a value the document doesn't contain, the loop catches it
+and recovers the real one; if a required field is genuinely absent, the loop refuses
+rather than making one up.
 
-Because the loop itself is public and injectable, adding a third target — records,
-entities, configuration files — is a matter of supplying a schema and a reference,
-not forking the code. And where no deterministic reference exists at all, as in
-open-ended summarising or sentiment, the library simply declines to claim exactness.
-That, too, is deliberate.
+You are not limited to those two. The loop is public, so you can add your own kind of
+extraction by giving it the shape you want back and a way to check it. And where there
+is nothing to check against — open-ended summarising, sentiment — the library declines
+to claim exactness rather than bluffing. That is deliberate, not a gap.
 
-## How to read this manual
+## Where to start, and what each chapter covers
 
 If you are new, start with **[Getting started](manual/01-getting-started.md)**: it
 covers installation, the handful of API calls, the `lfc` command-line tool, and how
@@ -87,7 +88,7 @@ For the change history, see the **[Changelog](CHANGELOG.md)**; for the short ver
 of all this, the **[project README](../README.md)**; and for the code itself, the
 **[repository](https://github.com/pcoz/llm-feedback-control)**.
 
-## Two ideas worth carrying with you
+## The two principles that matter
 
 The first is the analogy that gives the project its name: **the model is the
 amplifier, and the deterministic code is the feedback network around it.** You trade
