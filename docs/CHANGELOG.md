@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3] — 2026-06-01
+
+Documentation only — no code changes.
+
+- README doc-table links repaired after the manual chapters were renumbered
+  (worked-examples → 05, faq → 06).
+- Manual: readable API headings in Getting started, and a Home/Previous/Next nav
+  bar on every chapter page.
+
 ## [0.2.2] — 2026-06-01
 
 Documentation only — no code changes.
