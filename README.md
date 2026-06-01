@@ -45,17 +45,17 @@ against, so it refuses to claim exactness, by design.
 
 ## Documentation
 
-The full **user manual** is in [`docs/`](docs/index.md):
+The full **user manual** is in [`docs/`](https://github.com/pcoz/llm-feedback-control/blob/main/docs/index.md):
 
 | chapter | contents |
 |---|---|
-| [Getting started](docs/manual/01-getting-started.md) | install, the API, the `lfc` CLI, choosing/bringing a model, configuration |
-| [How it works](docs/manual/02-how-it-works.md) | the op-amp model: negative/positive feedback, refusal-as-stabilizer, the general engine |
-| [API reference](docs/manual/03-api-reference.md) | every public function |
-| [Results](docs/manual/04-results.md) | measured numbers, method, honest scope |
-| [Worked examples](docs/manual/05-examples.md) | actual run transcripts |
-| [FAQ](docs/manual/06-faq.md) | GPU? models? offline? why did it refuse? |
-| [Changelog](docs/CHANGELOG.md) | release history |
+| [Getting started](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/01-getting-started.md) | install, the API, the `lfc` CLI, choosing/bringing a model, configuration |
+| [How it works](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/02-how-it-works.md) | the op-amp model: negative/positive feedback, refusal-as-stabilizer, the general engine |
+| [API reference](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/03-api-reference.md) | every public function |
+| [Results](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/04-results.md) | measured numbers, method, honest scope |
+| [Worked examples](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/05-examples.md) | actual run transcripts |
+| [FAQ](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/06-faq.md) | GPU? models? offline? why did it refuse? |
+| [Changelog](https://github.com/pcoz/llm-feedback-control/blob/main/docs/CHANGELOG.md) | release history |
 
 ## Install
 
@@ -63,11 +63,11 @@ The full **user manual** is in [`docs/`](docs/index.md):
 pip install llm-feedback-control     # zero dependencies
 ```
 
-Then follow [Getting started](docs/manual/01-getting-started.md). The deterministic
+Then follow [Getting started](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/01-getting-started.md). The deterministic
 parts run with no model at all; a model (local Ollama, OpenAI, or your own callable)
 is a pure upgrade.
 
 ## License
 
-MIT with an attribution clause — see [`LICENSE`](LICENSE).
+MIT with an attribution clause — see [`LICENSE`](https://github.com/pcoz/llm-feedback-control/blob/main/LICENSE).
 Built with llm-feedback-control by Edward Chalk (sapientronic.ai).

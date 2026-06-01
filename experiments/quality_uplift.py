@@ -64,6 +64,7 @@ CORPUS = [
 
 
 def f1(extracted_states, extracted_trans, truth):
+    """Return (states-F1, transitions-F1) of an extraction vs ground truth, name-normalised."""
     es = {norm(s) for s in extracted_states}
     ts = {norm(s) for s in truth["states"]}
     et = {(norm(a), norm(b)) for a, b in extracted_trans}
@@ -77,6 +78,7 @@ def f1(extracted_states, extracted_trans, truth):
 
 
 def main():
+    """Compare open-loop vs closed-loop extraction F1 over the corpus and print the supported/not verdict."""
     print("=" * 74)
     print("QUALITY UPLIFT — small model open-loop vs closed-loop (F1 vs ground truth)")
     print("=" * 74)

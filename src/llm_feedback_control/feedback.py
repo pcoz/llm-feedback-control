@@ -29,6 +29,9 @@ STOP = {"If", "The", "A", "An", "After", "Once", "When", "Otherwise", "It", "The
 
 
 def candidate_states(text):
+    """Regex pass for capitalised tokens that look like state names — those after
+    "to/enters/...", or before "goes/ends/...", minus common sentence-start words.
+    The deterministic reference uses these to spot states the graph is missing."""
     c = set()
     for m in re.finditer(r"(?:goes to|moves to|move to|back to|to|enters|starts in|opens in|into)\s+([A-Z][A-Za-z0-9]+)", text):
         c.add(m.group(1))
@@ -38,6 +41,8 @@ def candidate_states(text):
 
 
 def candidate_trans(text):
+    """Regex pass for "X goes to Y (or Z)" transitions in the text — the edges the
+    consistency reference expects the extracted graph to contain."""
     tr = set()
     for m in re.finditer(r"([A-Z][A-Za-z0-9]+)\s+(?:goes to|moves to|move to)\s+([A-Z][A-Za-z0-9]+)"
                          r"(?:\s+or(?: to)?\s+([A-Z][A-Za-z0-9]+))?", text):

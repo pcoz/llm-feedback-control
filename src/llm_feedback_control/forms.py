@@ -63,6 +63,9 @@ def detect(ftype, text, field=None):
 
 
 def _money_val(v):
+    """Parse the first numeric value out of a currency/number string (commas
+    stripped), or None if there isn't one. Lets "$1,200.00", "1200" and "1,200"
+    compare equal."""
     m = re.findall(r"\d[\d,]*(?:\.\d+)?", str(v))
     return float(m[0].replace(",", "")) if m else None
 
@@ -134,6 +137,7 @@ def field_gaps(text, schema, record):
 
 # ── extraction (LLM, schema-shaped) + deterministic fallback ───────────────
 def _schema_line(schema):
+    """Render the field specs as a one-line hint embedded in the extraction prompt."""
     out = []
     for f in schema["fields"]:
         spec = f["type"]
@@ -146,6 +150,8 @@ def _schema_line(schema):
 
 
 def _coerce(obj, schema):
+    """Coerce raw model JSON down to exactly the schema's keys, mapping missing or
+    empty values to None. Returns None if the model didn't return an object at all."""
     if not isinstance(obj, dict):
         return None
     return {f["name"]: (obj.get(f["name"]) if obj.get(f["name"]) not in ("", []) else None)
@@ -183,6 +189,9 @@ def _snap_detectable(text, schema, record):
 
 
 def _norm_record(rec):
+    """Canonical form of a record for stall detection: sorted items with
+    whitespace collapsed and lower-cased, so cosmetic re-formatting doesn't read
+    as a change between loop iterations."""
     return tuple(sorted((k, re.sub(r"\s+", " ", str(v)).strip().lower())
                         for k, v in rec.items()))
 

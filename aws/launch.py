@@ -53,6 +53,7 @@ def load_id(): return INSTANCE_ID_FILE.read_text().strip() if INSTANCE_ID_FILE.e
 
 
 def ensure_bucket(s3):
+    """Create the S3 model/code cache bucket if it doesn't already exist."""
     try:
         s3.head_bucket(Bucket=BUCKET); log(f"  S3 bucket exists: {BUCKET}")
     except Exception:
@@ -61,6 +62,7 @@ def ensure_bucket(s3):
 
 
 def upload_code(args):
+    """Tar src/ + experiments/ (and key root files) and upload to S3 for the instance to fetch."""
     s3 = boto3.client('s3', region_name=REGION); ensure_bucket(s3)
     buf = io.BytesIO()
     skip = lambda ti: None if '__pycache__' in ti.name or ti.name.endswith('.pyc') else ti
@@ -78,6 +80,7 @@ def upload_code(args):
 
 
 def get_ubuntu_ami(ec2):
+    """Return the AMI ID of the newest Canonical Ubuntu 22.04 (jammy) x86_64 image."""
     r = ec2.describe_images(
         Filters=[{'Name': 'name', 'Values': ['ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*']},
                  {'Name': 'state', 'Values': ['available']},
@@ -87,6 +90,7 @@ def get_ubuntu_ami(ec2):
 
 
 def ensure_key_pair(ec2):
+    """Reuse or create the EC2 key pair, saving any new private key to ~/.ssh; returns its name."""
     kf = Path.home() / '.ssh' / f'{KEY_PAIR_NAME}.pem'
     try:
         ec2.describe_key_pairs(KeyNames=[KEY_PAIR_NAME]); log(f"  Key pair exists: {KEY_PAIR_NAME}"); return KEY_PAIR_NAME
@@ -97,6 +101,7 @@ def ensure_key_pair(ec2):
 
 
 def ensure_sg(ec2):
+    """Reuse or create the security group (SSH/22 open) and return its GroupId."""
     r = ec2.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': [SECURITY_GROUP_NAME]}])
     if r['SecurityGroups']:
         return r['SecurityGroups'][0]['GroupId']
@@ -107,6 +112,7 @@ def ensure_sg(ec2):
 
 
 def ensure_iam(iam):
+    """Reuse or create the IAM role + instance profile (SSM + S3 access); returns profile name."""
     try:
         iam.get_instance_profile(InstanceProfileName=IAM_PROFILE_NAME); log(f"  IAM profile exists"); return IAM_PROFILE_NAME
     except iam.exceptions.NoSuchEntityException:
@@ -127,6 +133,7 @@ def ensure_iam(iam):
 
 
 def user_data():
+    """Return the cloud-init bootstrap script: install Ollama + write the phase-2 setup.sh."""
     return f'''#!/bin/bash
 set -e
 exec > >(tee /var/log/llm-fbc-setup.log) 2>&1
@@ -177,6 +184,7 @@ echo "=== Phase 1 bootstrap complete ==="
 
 
 def find_instance(ec2):
+    """Return the first non-terminated instance tagged for this project, or None."""
     r = ec2.describe_instances(Filters=[
         {'Name': f'tag:{TAG_KEY}', 'Values': [TAG_PROJECT]},
         {'Name': 'instance-state-name', 'Values': ['pending', 'running', 'stopping', 'stopped']}])
@@ -192,6 +200,7 @@ def show(inst):
 
 
 def launch(args):
+    """Provision the EC2 instance (reusing any existing one): bucket, AMI, key, SG, IAM, run + wait."""
     ec2 = boto3.client('ec2', region_name=REGION); iam = boto3.client('iam', region_name=REGION)
     s3 = boto3.client('s3', region_name=REGION)
     existing = find_instance(ec2)

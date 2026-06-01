@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.4] — 2026-06-01
+
+Documentation and source comments only — no behaviour change.
+
+- README documentation links are now absolute GitHub URLs, so they work when
+  clicked from the PyPI project page (relative links resolved to nowhere there).
+- Thorough docstrings and explanatory comments across the package (notably the
+  finite-field engine in `auditor.py`) and the `experiments/` and `aws/` scripts.
+
 ## [0.2.3] — 2026-06-01
 
 Documentation only — no code changes.

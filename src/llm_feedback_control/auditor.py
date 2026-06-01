@@ -30,6 +30,8 @@ import sys, json, re
 
 from .llm import gen
 
+# The console on some platforms (e.g. Windows cp1252) can't encode the box-drawing
+# and maths glyphs in the demos; switch stdout to UTF-8 where the runtime allows it.
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -37,37 +39,62 @@ except Exception:
 
 
 def norm(s):
+    """Normalise a state/name for comparison: lower-case and strip everything but
+    alphanumerics, so "Fast Track", "fast-track" and "FastTrack" all compare equal."""
     return re.sub(r"[^a-z0-9]", "", str(s).lower())
 
 
 # === exact engine: F_p fp_orbit + graph facts (self-contained) ============
+# An OPTIONAL extra check. We treat the transition graph as a linear map over a
+# finite field F_p and look at its long-run behaviour ("standing mode"). It powers
+# the M3 non-injective-readout refusal; for ordinary workflow audits it is largely
+# redundant with the plain graph facts below.
 PRIMES = (2, 3, 5, 7)
 
 
 def fp_orbit(M, x0, p, max_steps=20000):
+    """Iterate the linear map ``x -> M·x (mod p)`` from ``x0`` and find its cycle.
+
+    The state space (vectors mod p) is finite, so the orbit must eventually repeat.
+    We remember every vector we've seen and the step it first appeared at; the
+    moment one recurs we've closed the loop. Returns ``(transient, period, cycle)``
+    — the number of steps before the cycle begins, its length, and the list of
+    vectors in the cycle (``(None, None, [])`` if it never settled in max_steps)."""
     n = len(x0); x = [v % p for v in x0]; seen = {}; orbit = []
     for t in range(max_steps):
         k = tuple(x)
-        if k in seen:
+        if k in seen:                              # this vector recurred -> cycle found
             s = seen[k]
-            return s, t - s, orbit[s:]          # transient, period, cycle vectors
+            return s, t - s, orbit[s:]             # transient length, period, cycle vectors
         seen[k] = t; orbit.append(x)
+        # advance one step over F_p:  x <- M·x  (mod p)
         x = [sum(M[i][j] * x[j] for j in range(n)) % p for i in range(n)]
-    return None, None, []
+    return None, None, []                          # never settled within the step budget
 
 
 def transfer_operator(states, trans, p):
+    """Build the mod-p transfer matrix ``M`` of the transition graph.
+
+    ``M[b][a]`` counts edges ``a -> b`` (the *column* is the source state), so that
+    multiplying a state-vector by M propagates "mass" one step along the
+    transitions: ``(M·x)[b] = Σ_a edges(a->b)·x[a]``. Returns ``(M, idx)`` where
+    ``idx`` maps each state name to its row/column index."""
     idx = {s: i for i, s in enumerate(states)}; n = len(states)
     M = [[0] * n for _ in range(n)]
     for a, b in trans:
         if a in idx and b in idx:
-            M[idx[b]][idx[a]] = (M[idx[b]][idx[a]] + 1) % p     # flow a -> b
+            M[idx[b]][idx[a]] = (M[idx[b]][idx[a]] + 1) % p     # add an edge a -> b
     return M, idx
 
 
 def graph_facts(states, trans):
+    """Provable structural facts about the graph, with no model involved: terminal
+    states (no outgoing edge), states unreachable from the start (``states[0]``), and
+    whether the graph contains a cycle."""
+    # adjacency list: state -> list of successors
     out = {s: [b for a, b in trans if a == s] for s in states}
     terminals = sorted(s for s in states if not out.get(s))
+    # reachability: depth-first flood from the start state (the first one listed)
     start = states[0] if states else None
     seen = set()
     if start is not None:
@@ -78,7 +105,7 @@ def graph_facts(states, trans):
                 if v not in seen:
                     seen.add(v); stack.append(v)
     unreachable = sorted(s for s in states if s not in seen)
-    # cycle detection (DFS)
+    # cycle detection via three-colour DFS: a GREY node reached again = back edge = cycle
     WHITE, GREY, BLACK = 0, 1, 2
     color = {s: WHITE for s in states}; has_cycle = [False]
     def dfs(u):
@@ -97,17 +124,25 @@ def graph_facts(states, trans):
 
 
 def exact_analysis(states, trans):
-    """Per-prime exact trace + bad-prime + readout injectivity (the M3 guard)."""
+    """Per-prime exact trace + bad-prime + readout injectivity (the M3 guard).
+
+    For each prime we launch a unit of mass at the start state and follow the
+    transfer operator to its standing mode (the cycle). A prime is "bad" if the
+    mode annihilates (the all-zero vector — common for acyclic graphs). The
+    "readout" is the sum of each mode vector; if two distinct mode vectors collapse
+    to the same readout, the readout is *non-injective* and the M3 guard refuses to
+    lift through it. Returns ``{"primes": [...], "facts": graph_facts(...)}``."""
     if not states:
         return {"primes": [], "facts": graph_facts(states, trans)}
-    x0 = [1] + [0] * (len(states) - 1)               # launch at the start state
+    x0 = [1] + [0] * (len(states) - 1)               # launch a unit at the start state
     per_prime = []
     for p in PRIMES:
         M, _ = transfer_operator(states, trans, p)
         transient, period, cycle = fp_orbit(M, x0, p)
         mode = cycle[0] if cycle else [0] * len(states)
-        bad = all(v == 0 for v in mode)
-        # readout = sum of mode; injective iff distinct cycle vectors -> distinct readouts
+        bad = all(v == 0 for v in mode)              # mode annihilates -> nothing to read
+        # readout = sum of each cycle vector; injective iff distinct vectors give
+        # distinct readouts (otherwise a lift through the readout is ambiguous).
         readouts = [sum(v) % p for v in cycle] if cycle else []
         distinct_vecs = len({tuple(v) for v in cycle})
         injective = len(set(readouts)) == distinct_vecs if cycle else True
@@ -117,6 +152,8 @@ def exact_analysis(states, trans):
 
 
 # === regime gate (hybrid: heuristic + LLM tie-break) ======================
+# Cue phrases that point each way. The gate counts them; a clear margin is decided
+# by the heuristic alone, and only genuinely ambiguous text consults the LLM.
 CONT_BELIEF = ["continuous", "continuously", "drift", "rises", "grows", "increase",
                "rate", "percent", "gradually", "slowly", "temperature", "price",
                "demand", "confidence", "trust", "trusts", "trustworthy", "feels",
@@ -127,6 +164,8 @@ FINITE_CUES = ["goes to", "moves from", "enters", "starts in", "opens in", "proc
 
 
 def gate_heuristic(text):
+    """Cheap, model-free signal for the regime gate: how many finite-structural cue
+    phrases appear vs continuous/belief ones. Returns ``(finite_count, cont_count)``."""
     t = text.lower()
     cont = sum(t.count(c) for c in CONT_BELIEF)
     fin = sum(t.count(c) for c in FINITE_CUES)
@@ -142,11 +181,12 @@ def regime_gate(text, use_llm=True, generate=None):
     g = generate or gen
     fin, cont = gate_heuristic(text)
     margin = abs(fin - cont)
-    # clear cases: decide by heuristic
+    # Clear case: a comfortable margin one way, and not a strong tug-of-war (both
+    # cue types present in force). Decide by the heuristic, no model needed.
     if margin >= 2 and not (fin > 0 and cont > 0 and min(fin, cont) >= 2):
         verdict = "finite_structural" if fin > cont else "model_only"
         return dict(verdict=verdict, reason=f"heuristic (fin={fin},cont={cont})", source="heuristic")
-    # ambiguous / mixed: ask the LLM to adjudicate
+    # Ambiguous / mixed: ask the LLM to adjudicate (best-effort; ignore failures).
     if use_llm:
         try:
             raw = g('Classify the description into exactly one label: '
@@ -159,7 +199,7 @@ def regime_gate(text, use_llm=True, generate=None):
                 return dict(verdict=label, reason=f"LLM tie-break (fin={fin},cont={cont})", source="llm")
         except Exception:
             pass
-    # fallback: both present -> mixed; else heuristic
+    # No model (or it declined to answer): both cue types present -> mixed; else heuristic.
     if fin > 0 and cont > 0:
         return dict(verdict="mixed", reason=f"both cues present (fin={fin},cont={cont})", source="heuristic")
     return dict(verdict="finite_structural" if fin >= cont else "model_only",
@@ -168,18 +208,23 @@ def regime_gate(text, use_llm=True, generate=None):
 
 # === extraction (LLM + schema + deterministic fallback) ===================
 def valid(o):
+    """Schema check for an extracted machine: a dict whose ``states`` is a list and
+    whose ``transitions`` is a list of two-element ``[from, to]`` pairs."""
     return (isinstance(o, dict) and isinstance(o.get("states"), list)
             and isinstance(o.get("transitions"), list)
             and all(isinstance(t, list) and len(t) == 2 for t in o["transitions"]))
 
 
 def fallback_extract(text):
+    """Deterministic, model-free extractor used when no LLM is available (or its
+    output is unusable). Pulls "X goes to Y (or Z)" transitions and "enters/starts
+    in X" states out of the text by regex."""
     st, tr = set(), set()
     for m in re.finditer(r"([A-Z][A-Za-z0-9]+)\s+(?:goes to|moves to|to)\s+([A-Z][A-Za-z0-9]+)"
                          r"(?:\s+or(?: to)?\s+([A-Z][A-Za-z0-9]+))?", text):
         a, b, c = m.group(1), m.group(2), m.group(3)
         st |= {a, b}; tr.add((a, b))
-        if c: st.add(c); tr.add((a, c))
+        if c: st.add(c); tr.add((a, c))             # "... or (to) Z" -> second edge a -> c
     for m in re.finditer(r"(?:enters|starts in|opens in)\s+([A-Z][A-Za-z0-9]+)", text):
         st.add(m.group(1))
     # Order states by FIRST APPEARANCE in the text, not alphabetically: the graph
@@ -193,9 +238,9 @@ def fallback_extract(text):
 
 
 def extract_workflow(text, generate=None):
-    """Extract a finite state machine: LLM (schema-validated) with a
-    deterministic regex fallback. Returns ``(graph, how)`` where how is
-    "llm" or "fallback"."""
+    """Extract a finite state machine: a schema-validated LLM call with a
+    deterministic regex fallback. Returns ``(graph, how)`` where ``how`` is "llm"
+    or "fallback"."""
     g = generate or gen
     try:
         raw = g('Extract the finite state machine. Return ONLY JSON '
@@ -211,7 +256,11 @@ def extract_workflow(text, generate=None):
 
 # === grounded report ======================================================
 def grounded_report(states, trace, llm=True, generate=None):
-    g = generate or gen
+    """Render the verified facts as a deterministic text block and, optionally, an
+    LLM rewrite constrained to name only those facts. Returns
+    ``(facts_text, english_text)``. The deterministic block is always
+    authoritative; the English is decorative and is marked unavailable if no model
+    answers."""
     facts = trace["facts"]
     bad = [pp["prime"] for pp in trace["primes"] if pp["bad_prime"]]
     noninj = [pp["prime"] for pp in trace["primes"] if not pp["readout_injective"]]
@@ -225,7 +274,9 @@ def grounded_report(states, trace, llm=True, generate=None):
     )
     english = ""
     if llm:
+        g = generate or gen
         try:
+            # Constrain the model to the verified facts so the prose can't drift.
             english = g("Write two plain sentences describing this process using ONLY "
                         "these verified facts. Name only the listed states; invent nothing.\n"
                         + deterministic).strip()
@@ -236,11 +287,13 @@ def grounded_report(states, trace, llm=True, generate=None):
 
 # === end-to-end audit =====================================================
 def run_audit(text, verbose=True, generate=None):
-    """Full pipeline: gate -> extract -> exact analysis -> grounded report,
-    with explicit refusals. Works with no model (deterministic fallback);
-    pass ``generate`` to use a specific LLM backend."""
+    """Full pipeline: gate -> extract -> exact analysis -> grounded report, with
+    explicit refusals. Works with no model (deterministic fallback); pass
+    ``generate`` to use a specific LLM backend. Returns a result dict whose
+    ``result`` is "OK", "OK (mixed: ...)", or a "REFUSED: ..." string."""
     gate = regime_gate(text, generate=generate)
     out = {"text": text, "gate": gate}
+    # Refuse continuous/belief input outright — there is no finite machine to analyse.
     if gate["verdict"] == "model_only":
         out["result"] = "REFUSED: model-only regime; no exact finite-structural analysis."
         return out
@@ -265,6 +318,7 @@ def banner(t):
 
 
 def demo_M1():
+    """M1: the full pipeline on a clean workflow — extract, analyse, report."""
     banner("M1 — process auditor (full pipeline, exact trace + grounded report)")
     text = ("A customer order enters Review. If approved it goes to Packing. If "
             "rejected it goes to Refund. Packing goes to Shipped. Shipped goes to "
@@ -278,6 +332,7 @@ def demo_M1():
 
 
 def demo_M2():
+    """M2: the gate refusing continuous/belief input (no fake state machine)."""
     banner("M2 — gate refusal on belief/continuous input")
     text = "The market price drifts until confidence improves, then buyers slowly return."
     r = run_audit(text)
@@ -287,9 +342,9 @@ def demo_M2():
 
 
 def demo_M3():
+    """M3: a symmetric 4-cycle whose F_p standing mode has several vectors that
+    collapse to the same sum-readout — so the lift through that readout is refused."""
     banner("M3 — non-injective readout refusal (no hallucinated synthesis)")
-    # a symmetric 4-cycle: its F_p standing mode has a multi-vector cycle whose
-    # sum-readout collapses distinct vectors -> the lift must be refused.
     states = ["S0", "S1", "S2", "S3"]
     trans = [("S0", "S1"), ("S1", "S2"), ("S2", "S3"), ("S3", "S0"),
              ("S1", "S0"), ("S2", "S1"), ("S3", "S2"), ("S0", "S3")]  # undirected 4-cycle
@@ -304,6 +359,8 @@ def demo_M3():
 
 
 def test_gate_hard():
+    """Stress the gate on deliberately ambiguous / mixed inputs, comparing the
+    heuristic-only verdict against the hybrid (heuristic + LLM tie-break) one."""
     banner("Q2 HARDENING — gate on ambiguous / mixed inputs (hybrid vs heuristic-only)")
     corpus = [
         ("After validation the system either commits or rolls back.", "finite_structural"),

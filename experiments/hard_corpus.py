@@ -81,6 +81,7 @@ EXTRACT = ('Extract the finite state machine. Return ONLY JSON '
 
 
 def f1(states, trans, truth):
+    """Return (states-F1, transitions-F1) of an extraction vs ground truth, name-normalised."""
     es = {norm(s) for s in states}; ts = {norm(s) for s in truth["states"]}
     et = {(norm(a), norm(b)) for a, b in trans}
     tt = {(norm(a), norm(b)) for a, b in truth["trans"]}
@@ -93,6 +94,7 @@ def f1(states, trans, truth):
 
 
 def ceiling_extract(text):
+    """Extract the FSM with the strong ceiling model, falling back to the deterministic parser."""
     try:
         o = json.loads(llm.gen_ceiling(EXTRACT.format(text=text), fmt="json"))
         if valid(o) and o.get("states"):
@@ -103,6 +105,8 @@ def ceiling_extract(text):
 
 
 def main():
+    """Run open/closed/ceiling extraction over the hard corpus; print per-row F1 and the
+    headline % of the small->ceiling gap that the feedback loop recovers."""
     print("=" * 80)
     print("HARD-CORPUS QUALITY UPLIFT —", llm.info())
     print("=" * 80)

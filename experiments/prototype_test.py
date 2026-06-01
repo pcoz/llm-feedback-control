@@ -78,6 +78,7 @@ FINITE_CUES = ["goes to", "enters", "starts in", "opens in", "if approved",
 
 
 def regime_gate(text):
+    """Heuristic router: classify text as 'finite_structural' or 'model_only' by cue-word counts."""
     t = text.lower()
     cont = sum(t.count(c) for c in CONT_BELIEF)
     fin = sum(t.count(c) for c in FINITE_CUES)
@@ -85,6 +86,7 @@ def regime_gate(text):
 
 
 def test_gate():
+    """Q2: score the regime gate over finite + non-finite items; return (accuracy, precision, recall)."""
     print("=" * 74); print("Q2 — REGIME GATE (heuristic; finite-structural vs model-only)"); print("=" * 74)
     items = [(d["text"], "finite_structural") for d in FINITE] + \
             [(t, "model_only") for t in NON_FINITE]
@@ -112,6 +114,7 @@ EXTRACT_PROMPT = ('Extract the finite state machine from the process description
 
 
 def valid_schema(obj):
+    """True if obj is the expected {states:[...], transitions:[[from,to],...]} extraction shape."""
     return (isinstance(obj, dict) and isinstance(obj.get("states"), list)
             and isinstance(obj.get("transitions"), list)
             and all(isinstance(tr, list) and len(tr) == 2 for tr in obj["transitions"]))
@@ -131,6 +134,7 @@ def fallback_extract(text):
 
 
 def score(extracted, truth):
+    """Return (state-precision, state-recall, transition-precision, transition-recall) vs truth."""
     es, ts = {norm(s) for s in extracted["states"]}, {norm(s) for s in truth["states"]}
     et = {(norm(a), norm(b)) for a, b in extracted["transitions"]}
     tt = {(norm(a), norm(b)) for a, b in truth["trans"]}
@@ -144,6 +148,7 @@ def score(extracted, truth):
 
 
 def test_extraction():
+    """Q1: extract each finite item with the LLM (fallback on bad schema/error); return mean transition P/R."""
     print("\n" + "=" * 74); print("Q1 — LLM EXTRACTION (phi3:mini) + schema validation + fallback"); print("=" * 74)
     rows = []
     for d in FINITE:
@@ -170,6 +175,7 @@ def test_extraction():
 
 # --- Q3: grounded vs plain report (auditability = unsupported entities) ---
 def build_trace(d):
+    """Build a verified-facts dict (states, transitions, terminals, unreachable) to ground a report."""
     states = d["states"]; trans = d["trans"]
     out = {s: [b for a, b in trans if a == s] for s in states}
     terminals = [s for s in states if not out[s]]
@@ -199,6 +205,7 @@ def unsupported_entities(report, truth_states):
 
 
 def test_reports(k=3):
+    """Q3: compare plain vs fact-grounded reports; return (plain, grounded) unsupported-entity counts."""
     print("\n" + "=" * 74); print("Q3 — GROUNDED vs PLAIN report (auditability: unsupported entities)"); print("=" * 74)
     plain_bad = grounded_bad = plain_tot = grounded_tot = 0
     for d in FINITE[:k]:
@@ -218,6 +225,7 @@ def test_reports(k=3):
 
 
 def main():
+    """Run the three prototype questions (gate, extraction, reports) and print a combined summary."""
     g = test_gate()
     e = test_extraction()
     r = test_reports()

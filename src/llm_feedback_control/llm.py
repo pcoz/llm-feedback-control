@@ -47,6 +47,8 @@ class BackendError(RuntimeError):
 
 
 def _ollama(prompt, fmt, model, timeout):
+    """POST one prompt to the Ollama /api/generate endpoint and return the response
+    text. Raises :class:`BackendError` (with guidance) if the server is unreachable."""
     body = {"model": model, "prompt": prompt, "stream": False,
             "options": {"temperature": 0.0}}
     if fmt:
@@ -80,6 +82,8 @@ def gen(prompt, fmt=None, model=None, timeout=600):
 
 
 def _gen_openai(prompt, model=None, timeout=120):
+    """Call the OpenAI chat-completions API (stdlib HTTP, no SDK), forcing a JSON
+    response. Used as the "ceiling" backend when CEILING_BACKEND=openai."""
     try:
         key = os.environ["OPENAI_API_KEY"]
     except KeyError as e:
@@ -110,6 +114,8 @@ def gen_ceiling(prompt, fmt="json", timeout=600):
 
 
 def info():
+    """One-line summary of the current backend configuration (for logs and
+    ``lfc --check``)."""
     return (f"small={MODEL} @ {OLLAMA_HOST} | ceiling={CEILING_MODEL} "
             f"(backend={CEILING_BACKEND})")
 

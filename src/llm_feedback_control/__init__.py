@@ -84,7 +84,7 @@ from .forms import (
     field_gaps as form_field_gaps,
 )
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 __all__ = [
     # headline

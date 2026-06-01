@@ -26,6 +26,7 @@ SAMPLE = ("A claim enters Intake. From Intake it goes to Triage. Triage goes to 
 
 
 def _print_audit(r):
+    """Pretty-print a `run_audit` result dict for the terminal."""
     print("gate      :", r["gate"]["verdict"], "|", r["gate"]["reason"])
     if "extraction" in r:
         ex = r["extraction"]
@@ -41,6 +42,7 @@ def _print_audit(r):
 
 
 def _print_doctor():
+    """Print the backend doctor report — what's reachable and what to do next."""
     d = doctor()
     print("llm-feedback-control doctor")
     print("  config :", info())

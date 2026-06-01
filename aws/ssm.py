@@ -29,6 +29,7 @@ INSTANCE_ID_FILE = Path(__file__).parent / '.instance_id'
 
 
 def get_instance_id():
+    """Return the instance ID saved by launch.py, or exit if none is recorded."""
     if INSTANCE_ID_FILE.exists():
         return INSTANCE_ID_FILE.read_text().strip()
     print("No instance ID found. Run 'python aws/launch.py' first.")
@@ -36,6 +37,7 @@ def get_instance_id():
 
 
 def run_commands(commands, timeout=120):
+    """Send shell commands via SSM, poll to completion, print stdout/stderr; return True on success."""
     instance_id = get_instance_id()
     ssm = boto3.client("ssm", region_name=REGION)
     r = ssm.send_command(
@@ -70,6 +72,7 @@ def run_commands(commands, timeout=120):
 
 
 def check_command(cmd_id):
+    """Fetch and print the result (status + stdout/stderr tail) of a previously-sent SSM command."""
     instance_id = get_instance_id()
     ssm = boto3.client("ssm", region_name=REGION)
     inv = ssm.get_command_invocation(CommandId=cmd_id, InstanceId=instance_id)
@@ -82,8 +85,9 @@ def check_command(cmd_id):
 
 
 def tail_log(log_path, interval=5):
+    """Poll a remote log file over SSM, printing only newly-appended bytes; Ctrl-C to stop."""
     print(f"Polling {log_path} every {interval}s. Ctrl-C to stop.")
-    last_len = 0
+    last_len = 0  # byte offset already printed; advances as the file grows
     try:
         while True:
             instance_id = get_instance_id()
