@@ -9,6 +9,7 @@ import llm_feedback_control as lfc
 from llm_feedback_control import (
     run_audit, extract_iterative, regime_gate, exact_analysis, graph_facts,
     fallback_extract, consistency_gaps, valid, norm,
+    extract_form, feedback_loop, form_field_gaps, fallback_extract_form,
 )
 
 WORKFLOW = ("A claim enters Intake. From Intake it goes to Triage. Triage goes "
@@ -123,3 +124,74 @@ def test_injectable_backend_is_used():
 def test_doctor_never_raises():
     d = lfc.doctor()
     assert "ollama_reachable" in d and "small_model" in d
+
+
+# --- generic feedback loop (the injectable engine) ------------------------
+def test_feedback_loop_converges_and_clamps():
+    def extract(t): return {"v": 0}
+    def reference(t, c): return [] if c["v"] >= 2 else ["too low"]
+    def repair(t, c, gaps): return {"v": c["v"] + 1}
+    cand, initial, hist, conv = feedback_loop(
+        "x", extract=extract, reference=reference, repair=repair,
+        signature=lambda c: c["v"], max_iters=5)
+    assert conv is True and cand["v"] == 2 and initial["v"] == 0
+
+    # never satisfiable -> refusal clamp fires (converged False)
+    cand, _, _, conv = feedback_loop(
+        "x", extract=lambda t: {"v": 0}, reference=lambda t, c: ["never"],
+        repair=lambda t, c, g: {"v": c["v"] + 1}, signature=lambda c: c["v"],
+        max_iters=3)
+    assert conv is False
+
+
+# --- form-field target ----------------------------------------------------
+FORM_SCHEMA = {"fields": [
+    {"name": "name",   "type": "string",  "required": True},
+    {"name": "ref",    "type": "pattern", "required": True, "pattern": r"[A-Z]{2}-\d{6}"},
+    {"name": "email",  "type": "email",   "required": True},
+    {"name": "amount", "type": "currency", "required": True},
+    {"name": "kind",   "type": "enum", "required": True, "values": ["fire", "theft"]},
+]}
+FORM_TEXT = ("Jane Doe, policy AB-123456, reach me at jane@x.com, total $200, "
+             "this is a fire claim.")
+
+
+def test_form_detectors_fill_without_model():
+    """No model: detectors deterministically fill the detectable fields."""
+    rec = fallback_extract_form(FORM_TEXT, FORM_SCHEMA)
+    assert rec["email"] == "jane@x.com"
+    assert rec["ref"] == "AB-123456"
+    assert "200" in str(rec["amount"])
+    assert rec["name"] is None          # string: not detectable
+
+
+def test_form_field_gaps_flags_missing_and_hallucinated():
+    miss = form_field_gaps("contact real@x.com", {"fields": [
+        {"name": "email", "type": "email", "required": True}]}, {"email": None})
+    assert any(g["field"] == "email" and g["problem"] == "missing_required" for g in miss)
+
+    hall = form_field_gaps("the only address is real@x.com", {"fields": [
+        {"name": "email", "type": "email", "required": True}]}, {"email": "fake@y.com"})
+    assert any("not found in source text" in g["problem"] for g in hall)
+
+
+def test_extract_form_refuses_unfindable_required_field():
+    """Dead backend + a required string the detectors can't see -> REFUSE,
+    but the detectable fields are still recovered from the text."""
+    def dead(prompt, fmt=None, **kw):
+        raise lfc.BackendError("no backend")
+    out = extract_form(FORM_TEXT, FORM_SCHEMA, generate=dead)
+    assert out["record"]["email"] == "jane@x.com"      # recovered deterministically
+    assert out["record"]["ref"] == "AB-123456"
+    assert out["result"].startswith("REFUSED")          # 'name' can't be found
+    assert "name" in {g["field"] for g in out["gaps"]}
+
+
+def test_extract_form_ok_with_perfect_backend():
+    perfect = ('{"name":"Jane Doe","ref":"AB-123456","email":"jane@x.com",'
+               '"amount":"$200","kind":"fire"}')
+    def fake(prompt, fmt=None, **kw): return perfect
+    out = extract_form(FORM_TEXT, FORM_SCHEMA, generate=fake)
+    assert out["converged"] is True
+    assert out["result"] == "OK"
+    assert out["record"]["kind"] == "fire"

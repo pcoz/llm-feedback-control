@@ -42,6 +42,10 @@ Two kinds of feedback, in plain terms:
         its answer, repeating until nothing is missing (a "fixed point") — and
         refuse if it never settles.
 
+Two built-in targets share one engine (``feedback_loop``): ``run_audit`` (workflows
+/ state machines) and ``extract_form`` (form fields against a schema). The loop's
+extractor and reference are injectable, so you can point it at new targets too.
+
 Zero third-party runtime dependencies. The deterministic core runs with no model
 at all; an LLM is a pure upgrade and is fully injectable (pass ``generate=``).
 
@@ -73,13 +77,21 @@ from .feedback import (
     candidate_states,
     candidate_trans,
 )
+from .loop import feedback_loop
+from .forms import (
+    extract_form,
+    fallback_extract_form,
+    field_gaps as form_field_gaps,
+)
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 
 __all__ = [
     # headline
     "run_audit",
+    "extract_form",
     "extract_iterative",
+    "feedback_loop",
     # negative-feedback pipeline parts
     "regime_gate",
     "gate_heuristic",
@@ -96,6 +108,9 @@ __all__ = [
     "consistency_gaps",
     "candidate_states",
     "candidate_trans",
+    # form target
+    "fallback_extract_form",
+    "form_field_gaps",
     # client
     "gen",
     "gen_ceiling",

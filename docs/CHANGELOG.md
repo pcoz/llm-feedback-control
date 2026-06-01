@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0] — 2026-06-01
+
+Feature release: a second extraction target and a public, injectable engine.
+
+### Added
+- **`extract_form(text, schema)`** — form-field extraction as a first-class target.
+  Verifies each value against the source text, recovers detectable values the model
+  hallucinated (reads them back out of the document), and refuses on a genuinely
+  missing required field rather than inventing one. Field types: `string`, `email`,
+  `phone`, `number`, `currency`, `date`, `enum`, `pattern`. Runs with no model
+  (regex detectors fill the detectable fields). Helpers `form_field_gaps` and
+  `fallback_extract_form` exported too.
+- **`feedback_loop(...)`** — the shared engine, now public and injectable. Supply
+  `extract` / `reference` / `repair` / `signature` (+ optional `finalize`) and the
+  loop owns the bounded positive feedback, fixed-point test, and refusal clamp.
+
+### Changed
+- `extract_iterative` (workflows) is refactored onto `feedback_loop` — same public
+  signature, return shape, and history format. "One engine, two targets" is now
+  literally true in the code, not just the docs.
+
 ## [0.1.3] — 2026-06-01
 
 Documentation only — no code changes.

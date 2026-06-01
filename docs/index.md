@@ -16,9 +16,10 @@ fills the gaps by re-asking, and **refuses** when it can't be sure. The result i
 structured output you can audit, from a model small enough to run on a laptop.
 
 It's one engine pointed at different targets: a target is anything you can pair with
-a schema and a deterministic reference. **Workflow / state-machine extraction is the
-first target shipped**; form fields, records, and entities are others the same loop
-handles. See [architecture.md §7](architecture.md#7-the-general-engine).
+a schema and a deterministic reference. **Two ship today** — workflow / state-machine
+extraction (`run_audit`) and form-field extraction (`extract_form`) — on one public,
+injectable loop; records and entities are others the same engine handles. See
+[architecture.md §7](architecture.md#7-the-general-engine).
 
 ## A 60-second tour
 

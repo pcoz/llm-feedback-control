@@ -39,12 +39,15 @@ times larger; see [results](#whats-measured-so-far).)
 ## What you can extract
 
 It's **one engine pointed at different targets.** A target is anything you can pair
-with a schema and a deterministic check — workflow is just the first one shipped:
+with a schema and a deterministic check — **two ship today**, and more are a small
+addition (the loop is public and injectable):
 
-- **workflows / processes → state machines** — *ships today*: states, transitions,
-  dead ends, unreachable steps, loops;
+- **workflows / processes → state machines** (`run_audit`) — *ships today*: states,
+  transitions, dead ends, unreachable steps, loops;
 - **form fields** (invoices, applications, claims) against a field schema + format
-  and required-field rules — *prototyped on the same loop*;
+  and required-field rules (`extract_form`) — *ships today*: verifies each value
+  against the source, recovers ones the model hallucinated, refuses on missing
+  required fields;
 - **records / tables** against a known column set and types;
 - **entities & relations** against a gazetteer or pattern set;
 - **configs / specs** against a schema or grammar.
@@ -115,6 +118,27 @@ lfc "A ticket opens in New. New goes to Assigned. Assigned goes to Resolved."
 lfc --check        # tells you exactly what backend is available and what to do
 lfc --demo         # runs the three worked demos
 ```
+
+### A second target: form fields
+
+The same engine, pointed at a field schema:
+
+```python
+from llm_feedback_control import extract_form
+
+schema = {"fields": [
+    {"name": "email",  "type": "email",    "required": True},
+    {"name": "amount", "type": "currency", "required": True},
+    {"name": "policy", "type": "pattern",  "required": True, "pattern": r"[A-Z]{2}-\d{6}"},
+]}
+out = extract_form("Policy AB-123456, reach me at jo@x.com, total $200.", schema)
+print(out["result"])   # OK    (REFUSED: ... when a required field can't be filled)
+print(out["record"])   # {'email': 'jo@x.com', 'amount': '$200', 'policy': 'AB-123456'}
+```
+
+Supported field types: `string`, `email`, `phone`, `number`, `currency`, `date`,
+`enum` (with `values`), `pattern` (with a regex). With no model, the detectors fill
+the detectable fields deterministically; same `record` shape.
 
 ### Add a model (optional, recommended)
 
@@ -216,9 +240,11 @@ clean corpus (it's brittle on deliberately *mixed* inputs — an open problem).
 
 ```
 src/llm_feedback_control/   the package (zero-dependency, pure standard library)
+  loop.py                   the shared engine: the injectable feedback_loop
   llm.py                    the LLM client + injectable backend + a doctor()
-  auditor.py                the negative-feedback pipeline (run_audit)
-  feedback.py               the bounded positive-feedback loop (extract_iterative)
+  auditor.py                the workflow negative-feedback pipeline (run_audit)
+  feedback.py               the workflow positive-feedback loop (extract_iterative)
+  forms.py                  the form-field target (extract_form)
   __main__.py               the `lfc` command-line tool
 experiments/                repro scripts for the measured results (not shipped)
 aws/                        optional: run a large ceiling model on EC2 (not shipped)
@@ -243,26 +269,35 @@ tests/                      deterministic tests (no model / no network)
 
 ## Adding a new target
 
-Only two things change between targets; the rest — the loop, the gap-filling, the
-refusal clamp, the LLM backend — is shared:
+Both shipped targets (`run_audit`, `extract_form`) run on one public, injectable
+engine — `feedback_loop`. Only two things change between targets; the rest — the
+bounded loop, the gap-filling, the refusal clamp, the LLM backend — is shared:
 
 1. **a target schema** — the shape you want out;
 2. **a deterministic reference** — model-free code that, given the text and a
-   candidate answer, reports what's missing or wrong. For the shipped workflow
-   target that's "does the extracted graph cover every state the text mentions?".
+   candidate answer, returns a list of what's missing or wrong (empty = done). For
+   workflows it's "does the graph cover every state the text mentions?"; for forms
+   it's "required fields present, valid, and actually found in the source text".
 
-A **form-field** target built on the same loop shows how this travels: its reference
-is a field schema plus independent regex detectors (email, date, currency, phone,
-custom patterns). It **verifies each value against the source document**, **recovers**
-a value the model hallucinated by reading it back out of the text, and **refuses**
-when a required field is genuinely absent — the same three behaviours as the workflow
-auditor, with a different reference. (Constrained-decoding libraries guarantee output
-*shape* but not *truth*; cloud OCR doesn't check against your schema. This does both.)
-On a small local model it lifted per-field accuracy and refused correctly on a
-genuinely-missing field.
+```python
+from llm_feedback_control import feedback_loop
 
-The LLM backend is already injectable (`generate=`); making the reference and
-extractor injectable too is the clean path to shipping more targets.
+final, initial, history, converged = feedback_loop(
+    text,
+    extract=my_extract,       # text -> candidate
+    reference=my_reference,   # (text, candidate) -> [gaps]   (empty == converged)
+    repair=my_repair,         # (text, candidate, gaps) -> candidate
+    signature=my_signature,   # candidate -> hashable (stall detection)
+    finalize=my_finalize,     # optional deterministic last resort
+)
+```
+
+The form target is the worked second example: its reference is a field schema plus
+independent regex detectors (email, date, currency, phone, custom patterns). It
+**verifies each value against the source document**, **recovers** a value the model
+hallucinated by reading it back out of the text, and **refuses** when a required
+field is genuinely absent. (Constrained-decoding libraries guarantee output *shape*
+but not *truth*; cloud OCR doesn't check against your schema. This does both.)
 
 ## Origin
 

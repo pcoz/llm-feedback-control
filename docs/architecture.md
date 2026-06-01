@@ -190,13 +190,14 @@ Point the engine at a new target by supplying two things:
 The reference is the crux. It determines whether the loop can converge **and**
 whether the engine helps at all: the payoff is large exactly where the reference is
 cheap and independent of the model, and the gate refuses where no such reference
-exists. A **form-field** instantiation built on this same loop (schema + regex
-detectors for emails, dates, money, phones, custom patterns) demonstrates the
-generality: it verifies each extracted value against the source document, recovers a
+exists. The **form-field** target (`extract_form`) is the second one shipped, built
+on this same loop (schema + regex detectors for emails, dates, money, phones, custom
+patterns): it verifies each extracted value against the source document, recovers a
 hallucinated value by reading it back out of the text, and refuses on a genuinely
 missing required field — the same three behaviours as the workflow auditor, with a
 different reference.
 
-The clean way to expose this in code is to make the reference and extractor
-**injectable** (the LLM backend already is, via `generate=`); then a new target is
-"bring a schema + a reference", not a fork.
+This is realised in code: both targets run on one public engine, `loop.feedback_loop`,
+whose extractor and reference are **injectable** (the LLM backend already is, via
+`generate=`). A new target is "bring a schema + a reference and call `feedback_loop`",
+not a fork.

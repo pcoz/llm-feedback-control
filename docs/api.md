@@ -39,6 +39,27 @@ The bounded positive-feedback loop (regenerative re-extraction to a fixed point)
 - `converged` — `True` if it reached a clean fixed point; `False` means the refusal
   clamp fired (iteration cap hit with residual gaps → treat as incomplete)
 
+### `extract_form(text, schema, generate=None, max_iters=4, verbose=False) -> dict`
+
+Extract form fields from free text, verified against a schema **and** the source.
+Returns a dict: `record` (`{field: value}`), `result` (`"OK"` or `"REFUSED: could
+not fill/validate required fields: …"`), `converged`, `iterations`, `gaps`
+(remaining `{field, problem, hint}` items), and `initial` (open-loop first pass).
+
+Schema: `{"fields": [{"name", "type", "required", …}]}`. Types: `string`, `email`,
+`phone`, `number`, `currency`, `date`, `enum` (+ `values`), `pattern` (+ `pattern`
+regex). With no model the regex detectors fill the detectable fields; same `record`
+shape.
+
+### `feedback_loop(text, *, extract, reference, repair, signature, finalize=None, max_iters=4, verbose=False, label="item") -> (candidate, initial, history, converged)`
+
+The shared engine both targets run on — the injectable seam. Supply four callables:
+`extract(text) -> candidate`, `reference(text, cand) -> [gaps]` (empty list ==
+converged), `repair(text, cand, gaps) -> candidate | None`, `signature(cand) ->
+hashable` (stall detection). Optional `finalize(text, cand) -> cand` is a
+deterministic last-resort pass before the final check. The loop owns the bounded
+positive feedback, the fixed-point test, and the refusal clamp.
+
 ---
 
 ## The negative-feedback pipeline parts
@@ -124,3 +145,20 @@ deterministic path.
 
 ### `__version__`
 The package version string.
+
+---
+
+## The form target (helpers)
+
+Exported at the top level:
+
+### `form_field_gaps(text, schema, record) -> list`
+The form reference: a list of `{field, problem, hint}` the record fails against the
+schema and the source text (empty == complete). Drives the `extract_form` loop.
+
+### `fallback_extract_form(text, schema) -> dict`
+No-model baseline: regex detectors fill the detectable fields (email, phone,
+currency, date, custom pattern); other fields are `None`.
+
+More internals (`detect`, `validate`, `_snap_detectable`) live in
+`llm_feedback_control.forms` for power users building a custom form reference.

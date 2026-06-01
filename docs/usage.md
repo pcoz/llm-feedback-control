@@ -123,6 +123,51 @@ converged    # True iff it reached a clean fixed point; False -> refusal clamp f
 `converged is False` means the loop hit its iteration cap with residual gaps — the
 **refusal clamp**. Treat that result as "incomplete, do not trust as final".
 
+### `extract_form(text, schema, *, generate=None, max_iters=4, verbose=False)`
+
+The second built-in target: form-field extraction, verified against a schema and the
+source text.
+
+```python
+from llm_feedback_control import extract_form
+
+schema = {"fields": [
+    {"name": "claimant", "type": "string",  "required": True},
+    {"name": "policy",   "type": "pattern", "required": True, "pattern": r"[A-Z]{2}-\d{6}"},
+    {"name": "email",    "type": "email",   "required": True},
+    {"name": "amount",   "type": "currency","required": True},
+    {"name": "kind",     "type": "enum",    "required": True,
+     "values": ["collision", "theft", "fire", "water", "other"]},
+]}
+
+out = extract_form("Claim by Tom Becker, policy TH-998120, tbecker@x.com, "
+                   "loss $1,180, theft.", schema)
+out["result"]      # "OK"  or  "REFUSED: could not fill/validate required fields: ..."
+out["record"]      # {'claimant': 'Tom Becker', 'policy': 'TH-998120', ...}
+out["converged"]   # True iff every required field is filled and valid
+out["gaps"]        # remaining {field, problem, hint} items
+```
+
+Field types: `string`, `email`, `phone`, `number`, `currency`, `date`, `enum` (with
+`values`), `pattern` (with a regex). It **verifies each value against the source
+text**, recovers detectable values the model hallucinated, and **refuses** rather
+than inventing a missing required field. Runs with no model (detectors fill the
+detectable fields).
+
+### Building your own target with `feedback_loop`
+
+Both targets run on one injectable engine. To add a new one, supply an extractor, a
+deterministic reference (returns a list of gaps; empty = done), a repair step, and a
+signature for stall detection:
+
+```python
+from llm_feedback_control import feedback_loop
+
+final, initial, history, converged = feedback_loop(
+    text, extract=my_extract, reference=my_reference,
+    repair=my_repair, signature=my_signature, finalize=None)
+```
+
 ### Lower-level building blocks
 
 All exported from the top-level package:

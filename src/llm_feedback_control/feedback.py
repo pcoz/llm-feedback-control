@@ -22,6 +22,7 @@ The LLM backend is injectable via ``generate`` (defaults to llm.gen).
 """
 import re, json
 from .llm import gen
+from .loop import feedback_loop
 from .auditor import valid, fallback_extract, norm
 
 STOP = {"If", "The", "A", "An", "After", "Once", "When", "Otherwise", "It", "Then"}
@@ -64,53 +65,65 @@ def extract_iterative(text, max_iters=4, verbose=True, generate=None):
     open-loop iter-0 snapshot, a per-iteration history, and whether it
     converged to a clean fixed point (no residual gaps). Pass ``generate`` to
     use a specific LLM backend; with no model it returns the deterministic
-    extraction unchanged (history length 1)."""
-    g = generate or gen
-    # iteration 0: plain extraction
-    try:
-        raw = g('Extract the finite state machine. Return ONLY JSON '
-                '{"states":[...],"transitions":[["FROM","TO"],...]} using exact state '
-                f'names from the text. Text: "{text}"', fmt="json")
-        graph = json.loads(raw)
-        if not (valid(graph) and graph.get("states")):
-            graph = fallback_extract(text)
-    except Exception:
-        graph = fallback_extract(text)
+    extraction unchanged (history length 1).
 
-    initial = json.loads(json.dumps(graph))   # iter-0 (open-loop) snapshot
-    history = []
-    for it in range(max_iters):
-        miss_s, miss_t = consistency_gaps(text, graph)
-        sig = (tuple(sorted(norm(s) for s in graph["states"])),
-               tuple(sorted((norm(a), norm(b)) for a, b in graph["transitions"])))
-        history.append((it, len(graph["states"]), len(graph["transitions"]), miss_s, miss_t))
-        if verbose:
-            print(f"  iter {it}: states={graph['states']}")
-            print(f"          gaps -> missing states {miss_s or '∅'}, missing transitions {miss_t or '∅'}")
-        if not miss_s and not miss_t:
-            return graph, initial, history, True   # FIXED POINT (converged, no gaps)
-        # positive feedback: re-prompt with the deterministic gaps
-        gaps_txt = (f"missing states: {miss_s}; missing transitions: {miss_t}")
+    This is the workflow instantiation of the shared engine (``loop.feedback_loop``):
+    the extractor, reference (``consistency_gaps``), and repair below are the only
+    workflow-specific pieces."""
+    g = generate or gen
+
+    def extract(t):
         try:
-            raw = g('Here is a state machine you extracted, and a list of items the '
-                    'source text mentions that are MISSING from it. Return the COMPLETE '
-                    'corrected machine as JSON {"states":[...],"transitions":[["FROM","TO"],...]}, '
-                    'adding the missing items (and their transitions) using exact names. '
-                    f'Current: {json.dumps({"states": graph["states"], "transitions": graph["transitions"]})}. '
-                    f'Missing per the text: {gaps_txt}. Source text: "{text}"', fmt="json")
-            ng = json.loads(raw)
-            if valid(ng) and ng.get("states"):
-                # check it actually changed (avoid stalling)
-                nsig = (tuple(sorted(norm(s) for s in ng["states"])),
-                        tuple(sorted((norm(a), norm(b)) for a, b in ng["transitions"])))
-                graph = ng
-                if nsig == sig:
-                    break                          # no change -> not converging
+            graph = json.loads(g(
+                'Extract the finite state machine. Return ONLY JSON '
+                '{"states":[...],"transitions":[["FROM","TO"],...]} using exact state '
+                f'names from the text. Text: "{t}"', fmt="json"))
+            if valid(graph) and graph.get("states"):
+                return graph
         except Exception:
-            break
-    # exhausted iterations with residual gaps -> REFUSAL CLAMP (stability bound)
-    miss_s, miss_t = consistency_gaps(text, graph)
-    converged = not miss_s and not miss_t
+            pass
+        return fallback_extract(t)
+
+    def reference(t, graph):
+        miss_s, miss_t = consistency_gaps(t, graph)
+        return [("state", s) for s in miss_s] + [("trans", a, b) for a, b in miss_t]
+
+    def repair(t, graph, gaps):
+        miss_s = [x[1] for x in gaps if x[0] == "state"]
+        miss_t = [(x[1], x[2]) for x in gaps if x[0] == "trans"]
+        gaps_txt = f"missing states: {miss_s}; missing transitions: {miss_t}"
+        try:
+            ng = json.loads(g(
+                'Here is a state machine you extracted, and a list of items the '
+                'source text mentions that are MISSING from it. Return the COMPLETE '
+                'corrected machine as JSON {"states":[...],"transitions":[["FROM","TO"],...]}, '
+                'adding the missing items (and their transitions) using exact names. '
+                f'Current: {json.dumps({"states": graph["states"], "transitions": graph["transitions"]})}. '
+                f'Missing per the text: {gaps_txt}. Source text: "{t}"', fmt="json"))
+            if valid(ng) and ng.get("states"):
+                return ng
+        except Exception:
+            pass
+        return None
+
+    def signature(graph):
+        return (tuple(sorted(norm(s) for s in graph["states"])),
+                tuple(sorted((norm(a), norm(b)) for a, b in graph["transitions"])))
+
+    graph, initial, raw_hist, converged = feedback_loop(
+        text, extract=extract, reference=reference, repair=repair,
+        signature=signature, max_iters=max_iters, verbose=False, label="workflow")
+
+    # preserve the documented history shape: (it, n_states, n_trans, miss_s, miss_t)
+    history = []
+    for it, snap, gaps in raw_hist:
+        miss_s = [x[1] for x in gaps if x[0] == "state"]
+        miss_t = [(x[1], x[2]) for x in gaps if x[0] == "trans"]
+        if verbose:
+            print(f"  iter {it}: states={snap['states']}")
+            print(f"          gaps -> missing states {miss_s or '∅'}, "
+                  f"missing transitions {miss_t or '∅'}")
+        history.append((it, len(snap["states"]), len(snap["transitions"]), miss_s, miss_t))
     return graph, initial, history, converged
 
 
