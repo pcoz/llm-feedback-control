@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.1] — 2026-06-07
+
+A small, **backward-compatible** addition to `schmitt_gate`, plus docs. No existing
+call changes behaviour.
+
+- **`schmitt_gate` can now be *set***, like the set/reset input of a latch:
+  `classify(force=True)` forces the verdict on, `classify(force=False)` off, and
+  `classify()` (no argument) reads the current verdict without changing it. After a
+  force, the same hysteresis resumes — only a decisive crossing of the other
+  threshold moves it back. Use it for a human override, a hard rule, or an emergency
+  latch. (The existing `classify(score)` call is unchanged.)
+- Manual chapter 07 expanded: **what a clean edge drives** (an irreversible commit,
+  a latch, a halt, a two-way mode switch); the **decisive-and-sustained** recipe for
+  irreversible commits (a single reading above `high` can still be a spike); and why
+  a latch is enough for one-shot actions but only hysteresis works for a reversible,
+  two-way actuator.
+
 ## [0.3.0] — 2026-06-07
 
 New feature — **the controller seat is now pluggable, and the op-amp paradigm is

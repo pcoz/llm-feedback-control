@@ -94,9 +94,21 @@ def schmitt_gate(low, high, *, start=False):
       * it flips back to False only when the score falls **at or below** ``low``;
       * **between** ``low`` and ``high`` (the dead-band) it HOLDS its last value.
 
-    Returns a stateful ``classify(score) -> bool``. ``start`` is the initial
-    verdict (used until a score first leaves the dead-band). Use it to keep a
-    routing decision stable when a confidence score is noisy near the boundary.
+    Returns a stateful ``classify(score=None, force=None) -> bool``. ``start`` is
+    the initial verdict (used until a score first leaves the dead-band). Use it to
+    keep a routing decision stable when a confidence score is noisy near the boundary.
+
+    The gate can also be **set** directly, like the set/reset input of a latch:
+
+      * ``classify(force=True)`` forces the verdict on (and it sticks, exactly as a
+        crossing would, until a later score or force changes it);
+      * ``classify(force=False)`` forces it off;
+      * ``classify()`` with no argument reads the current verdict without changing it.
+
+    Use the override for a human decision, a hard rule, or an emergency latch (force
+    the gate into "halt"/"supervised" and let the deadband hold it there). A forced
+    verdict still obeys the same hysteresis afterwards — only a decisive crossing of
+    the *other* threshold will move it back.
 
     Raises ``ValueError`` if ``low > high``."""
     if low > high:
@@ -105,12 +117,16 @@ def schmitt_gate(low, high, *, start=False):
     # which is exactly the hysteresis (the gate "remembers" where it was).
     state = {"on": bool(start)}
 
-    def classify(score):
-        if score >= high:
-            state["on"] = True
-        elif score <= low:
-            state["on"] = False
-        # else: in the dead-band -> hold the previous verdict (no chatter)
+    def classify(score=None, force=None):
+        if force is not None:
+            state["on"] = bool(force)          # set / reset override (a latch input)
+        elif score is not None:
+            if score >= high:
+                state["on"] = True
+            elif score <= low:
+                state["on"] = False
+            # else: in the dead-band -> hold the previous verdict (no chatter)
+        # score is None and force is None -> read the current verdict, unchanged
         return state["on"]
 
     return classify

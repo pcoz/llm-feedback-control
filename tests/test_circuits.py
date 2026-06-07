@@ -65,3 +65,15 @@ def test_schmitt_rejects_bad_thresholds():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_schmitt_force_sets_and_reads():
+    g = schmitt_gate(0.4, 0.6, start=False)
+    assert g() is False                  # read, unchanged
+    assert g(force=True) is True         # set on
+    assert g(0.5) is True                # dead-band holds the forced state
+    assert g() is True                   # read, still on
+    assert g(0.3) is False               # decisive crossing overrides the forced state
+    assert g(force=False) is False       # reset off
+    assert g(0.55) is False              # dead-band holds the reset state
+    assert g(0.7) is True                # crossing high still works after a force

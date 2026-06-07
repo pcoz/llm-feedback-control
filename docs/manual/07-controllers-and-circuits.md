@@ -135,6 +135,53 @@ route_here = gate(score)                 # stable across borderline scores
 It flips to `True` only above `high`, back to `False` only below `low`, and holds
 its last verdict in between — so a noisy score near the boundary stops oscillating.
 
+**What the clean edge drives.** The real point is less "stop the flicker" than
+*what you wire the clean on/off to*. In electronics a Schmitt trigger's clean edge
+drives a clock, a flip-flop, a relay, an interrupt — things you must not fire on a
+noisy input. The same holds here: a debounced edge is what you safely connect to
+something consequential.
+
+- **an irreversible commit** — issue the refund, charge the card, send the email,
+  execute the trade, deploy;
+- **a latch** — enter a sticky mode (incident mode, escalated, fraud-case) that
+  persists until explicitly cleared;
+- **a halt** — a circuit-breaker that stops an agent loop or freezes autonomous
+  actions until reset;
+- **a two-way mode switch** — run autonomously ↔ ask a human; raise ↔ clear an alert.
+
+The hysteresis matters in proportion to the cost and irreversibility of what the
+edge drives. A cheap, reversible, read-only decision does not need it; a commit, a
+latch, or a halt does.
+
+**One-shot vs two-way — and why a latch is not enough.** For a one-shot
+irreversible action a commit-once *latch* (an idempotency key) already stops
+duplicates. What a latch cannot fix is committing on a transient blip: it fires
+once, but on the *first* crossing, which may be noise. The gate's `high` line
+raises that bar — yet a single reading above `high` can still be a spike. For an
+action you cannot undo, require the decisive state to **hold** for a couple of
+readings: decisive *and sustained*. The gate is the first ingredient, not the
+whole recipe.
+
+For a *reversible, two-way* actuator the latch is no help — the system must switch
+both directions — and hysteresis is exactly what stops a borderline signal from
+chattering the actuator back and forth. That is the cleanest home for a Schmitt
+trigger. (The companion book's `08_commit_gate` example simulates both cases from a
+latent truth plus seeded noise and reports the effect over thousands of trials.)
+
+**Setting the edge.** The gate also has a manual override, like the set/reset input
+of a latch: `gate(force=True)` forces the verdict on, `gate(force=False)` forces it
+off, and `gate()` with no argument reads the current verdict. Use it for a human
+decision, a hard rule, or an emergency latch — force the gate into "halt" or
+"supervised" and the deadband holds it there until a decisive crossing of the other
+threshold moves it back.
+
+```python
+gate = schmitt_gate(low=0.4, high=0.6)
+gate(force=True)     # human/rule override: latch it ON
+gate(0.5)            # -> True   (the deadband holds the forced state)
+state = gate()       # read without changing it
+```
+
 ## See it run (no model needed)
 
 Both new modules ship offline, scripted demos — they use a fake `generate`, so

@@ -47,7 +47,7 @@ the whole story.
 | Keep an exact guarantee but add a critic's breadth on top | `combine_references` | summing junction |
 | Avoid a single critic's false alarms / same-model rubber-stamping | `quorum_reference` (independent critics) | instrumentation amp |
 | Run a multi-step pipeline (extract → normalise → enrich), each step checked, stopping if one can't be trusted | `cascade` / `loop_stage` | multi-stage amp |
-| Stop a borderline accept/refuse decision from flip-flopping run to run | `schmitt_gate` | Schmitt trigger |
+| Drive an irreversible commit, or flip a two-way mode, off a noisy score without chattering (and set it directly when a human or rule decides) | `schmitt_gate` | Schmitt trigger |
 
 The rows below the line are covered in
 [Controllers and circuits](https://github.com/pcoz/llm-feedback-control/blob/main/docs/manual/07-controllers-and-circuits.md);
