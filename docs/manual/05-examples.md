@@ -153,4 +153,90 @@ shown in §4 reproduces them directly.
 
 ---
 
+## 5. Form-field extraction via the CLI
+
+`extract_form` is also available from the command line with `lfc --form --schema`.
+The schema is auto-detected: a JSON file path or an inline JSON string.
+
+### All-detectable schema (OK)
+
+A schema whose required fields are all detectable types (`pattern`, `email`, `currency`, …)
+completes with no model at all:
+
+```json
+{"fields": [
+    {"name": "policy",   "type": "pattern", "required": true, "pattern": "[A-Z]{2}-\\d{6}"},
+    {"name": "email",    "type": "email",   "required": true},
+    {"name": "amount",   "type": "currency","required": true}
+]}
+```
+
+```console
+$ lfc --form --schema all_detectable.json \
+  "Policy OT-771234, reach me at aisha@example.org, lost 950.00."
+
+result    : OK
+converged : True
+iterations: 1
+record    :
+   policy: OT-771234
+   email: aisha@example.org
+   amount: 950.00
+```
+
+### Mixed schema (REFUSED on undetectable fields)
+
+Add a `string` or `enum` required field and, without an LLM, the system refuses
+rather than inventing. The detectable fields are still filled deterministically:
+
+```json
+{"fields": [
+    {"name": "claimant", "type": "string",  "required": true},
+    {"name": "policy",   "type": "pattern", "required": true, "pattern": "[A-Z]{2}-\\d{6}"},
+    {"name": "email",    "type": "email",   "required": true},
+    {"name": "amount",   "type": "currency","required": true},
+    {"name": "kind",     "type": "enum",    "required": true, "values": ["theft","fire"]}
+]}
+```
+
+```console
+$ lfc --form --schema mixed.json \
+  "Policy XY-998120, john@test.com, claimed 1500.00."
+
+result    : REFUSED: could not fill/validate required fields: claimant, kind
+converged : False
+iterations: 1
+record    :
+   claimant: None
+   policy: XY-998120
+   email: john@test.com
+   amount: 1500.00
+   kind: None
+gaps:
+   claimant: missing_required
+   kind: missing_required
+```
+
+### Inline schema
+
+For quick one-offs you can pass the schema directly without a file:
+
+```console
+$ lfc --form --schema '{"fields":[{"name":"email","type":"email","required":true}]}' \
+  "contact me at bob@example.com"
+
+result    : OK
+converged : True
+iterations: 1
+record    :
+   email: bob@example.com
+```
+
+With an LLM backend reachable, `string` and `enum` fields are populated too — the same
+`extract_form` loop described in [§4](#4-both-targets-on-a-live-small-model-phi3mini) — but
+even with no model the detectors fill the detectable types (email, phone, currency, date,
+pattern), making simple extractions work immediately after `pip install`.
+
+---
+
 [← Results](04-results.md) · [Manual home](../index.md) · [FAQ →](06-faq.md)
