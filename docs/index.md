@@ -58,7 +58,7 @@ kinds of extraction built in.
   sent to Investigation…" — and it returns the underlying state machine, together
   with the facts that can be *proved* about it: which steps are dead ends, which can
   never be reached, and where the loops are.
-- **Form-field extraction** (`extract_form`). Give it a document and a list of the
+- **Form-field extraction** (`extract_form`, CLI: `lfc --form --schema`). Give it a document and a list of the
   fields you want — a name, an email, a policy number, an amount — and it returns
   those fields filled in, but only after checking each value against the source text.
   If the model invents a value the document doesn't contain, the loop catches it and

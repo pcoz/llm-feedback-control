@@ -76,6 +76,8 @@ lfc "A ticket opens in New. New goes to Assigned. Assigned goes to Resolved."
 lfc --check         # probe the backend; say exactly what's available / what to do
 lfc --demo          # run the three worked demos (M1 audit, M2 refusal, M3 readout)
 lfc --json "..."    # print the full audit result as JSON
+lfc --form --schema path/to/schema.json "..."   # extract form fields (file schema)
+lfc --form --schema '{"fields":[...]}' "..."    # extract form fields (inline schema)
 lfc --version
 lfc                 # with no text, audits a built-in sample
 ```
@@ -128,6 +130,7 @@ converged    # True iff it reached a clean fixed point; False -> refusal clamp f
 ### `extract_form` — form-field extraction
 
 The second built-in target, verified against a schema and the source text.
+Also available on the command line as `lfc --form --schema`.
 
 ```python
 from llm_feedback_control import extract_form

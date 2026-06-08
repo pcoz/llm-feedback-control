@@ -5,6 +5,11 @@ graph analysis, the regex fallback extractor, the regime-gate heuristic, the
 consistency reference, and the feedback loop driven by an *injected* fake
 backend. This is what CI runs.
 """
+import io
+import os
+import sys
+import tempfile
+
 import llm_feedback_control as lfc
 from llm_feedback_control import (
     run_audit, extract_iterative, regime_gate, exact_analysis, graph_facts,
@@ -195,3 +200,206 @@ def test_extract_form_ok_with_perfect_backend():
     assert out["converged"] is True
     assert out["result"] == "OK"
     assert out["record"]["kind"] == "fire"
+
+
+# ── CLI --form / --schema tests ────────────────────────────────────────────
+from llm_feedback_control.__main__ import _load_schema, main
+
+INLINE_SCHEMA = '{"fields": [{"name":"email","type":"email","required":true}]}'
+FORM_TEXT_CLI = "contact me at test@example.com"
+FORM_SCHEMA_OBJ = {"fields": [{"name":"email", "type": "email", "required": True}]}
+
+
+def test_load_schema_inline_json():
+    """Inline JSON string parses to a valid schema dict."""
+    s = _load_schema(INLINE_SCHEMA)
+    assert s == FORM_SCHEMA_OBJ
+
+
+def test_load_schema_from_file():
+    """A schema file is read and parsed correctly."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                     encoding="utf-8", delete=False) as f:
+        f.write(INLINE_SCHEMA)
+        tmp = f.name
+    try:
+        s = _load_schema(tmp)
+        assert s == FORM_SCHEMA_OBJ
+    finally:
+        os.unlink(tmp)
+
+
+def test_load_schema_at_prefix():
+    """@file reads the file path after the @."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                     encoding="utf-8", delete=False) as f:
+        f.write(INLINE_SCHEMA)
+        tmp = f.name
+    try:
+        s = _load_schema("@" + tmp)
+        assert s == FORM_SCHEMA_OBJ
+    finally:
+        os.unlink(tmp)
+
+
+def test_load_schema_missing_fields_key():
+    """Schema without 'fields' raises ValueError."""
+    try:
+        _load_schema('{"notfields":[]}')
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "fields" in str(e)
+
+
+def test_load_schema_duplicate_field():
+    """Duplicate field names raise ValueError."""
+    try:
+        _load_schema('{"fields":[{"name":"x","type":"string"},{"name":"x","type":"string"}]}')
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "duplicate" in str(e)
+
+
+def test_cli_form_inline_schema():
+    """--form --schema <inline> <text> returns OK with a perfect generate."""
+    perfect = '{"email":"test@example.com"}'
+    def fake(prompt, fmt=None, **kw):
+        return perfect
+    import llm_feedback_control.forms as forms
+    orig = forms.gen
+    forms.gen = fake
+    try:
+        out = io.StringIO()
+        sys.stdout = out
+        rc = main(["--form", "--schema", INLINE_SCHEMA, FORM_TEXT_CLI])
+        sys.stdout = sys.__stdout__
+        output = out.getvalue()
+    finally:
+        forms.gen = orig
+    assert rc == 0
+    assert "OK" in output and "REFUSED" not in output
+
+
+def test_cli_form_json_output():
+    """--form --schema --json emits valid JSON."""
+    perfect = '{"email":"test@example.com"}'
+    def fake(prompt, fmt=None, **kw):
+        return perfect
+    import llm_feedback_control.forms as forms
+    orig = forms.gen
+    forms.gen = fake
+    try:
+        out = io.StringIO()
+        sys.stdout = out
+        rc = main(["--form", "--schema", INLINE_SCHEMA,
+                   "--json", FORM_TEXT_CLI])
+        sys.stdout = sys.__stdout__
+        output = out.getvalue()
+    finally:
+        forms.gen = orig
+    assert rc == 0
+    import json
+    data = json.loads(output)
+    assert "record" in data
+    assert "result" in data
+    assert data["result"] == "OK"
+
+
+def test_cli_form_missing_schema():
+    """--form without --schema uses the built-in default schema."""
+    out = io.StringIO()
+    sys.stdout = out
+    rc = main(["--form", FORM_TEXT_CLI])
+    sys.stdout = sys.__stdout__
+    assert rc == 0
+    output = out.getvalue()
+    # the default schema + user's text should still extract detectable fields
+    assert "test@example.com" in output
+
+
+def test_cli_form_invalid_schema():
+    """--form --schema with garbage JSON gives error."""
+    out = io.StringIO()
+    sys.stdout = out
+    rc = main(["--form", "--schema", "not-json-at-all", FORM_TEXT_CLI])
+    sys.stdout = sys.__stdout__
+    assert rc == 1
+    assert "error" in out.getvalue().lower()
+
+
+def test_cli_form_no_text_uses_sample():
+    """With no text argument, --form uses the built-in sample."""
+    out = io.StringIO()
+    sys.stdout = out
+    rc = main(["--form", "--schema", INLINE_SCHEMA])
+    sys.stdout = sys.__stdout__
+    assert rc == 0
+    output = out.getvalue()
+    # should mention the built-in sample message
+    assert "built-in" in output.lower() or "sample" in output.lower()
+
+
+def test_cli_form_refuses_with_dead_backend():
+    """Dead backend + undetectable required string field -> REFUSED, not crash."""
+    def dead(prompt, fmt=None, **kw):
+        raise lfc.BackendError("no backend")
+    schema_str = '{"fields":[{"name":"name","type":"string","required":true}]}'
+    import llm_feedback_control.forms as forms
+    orig = forms.gen
+    forms.gen = dead
+    try:
+        out = io.StringIO()
+        sys.stdout = out
+        rc = main(["--form", "--schema", schema_str, "some text here"])
+        sys.stdout = sys.__stdout__
+    finally:
+        forms.gen = orig
+    assert rc == 0
+    output = out.getvalue()
+    assert "REFUSED" in output
+
+
+def test_cli_form_file_schema():
+    """--form --schema <file> works end-to-end through main()."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                     encoding="utf-8", delete=False) as f:
+        f.write(INLINE_SCHEMA)
+        tmp = f.name
+    try:
+        out = io.StringIO()
+        sys.stdout = out
+        rc = main(["--form", "--schema", tmp, FORM_TEXT_CLI])
+        sys.stdout = sys.__stdout__
+    finally:
+        os.unlink(tmp)
+    assert rc == 0
+    assert "test@example.com" in out.getvalue()
+
+
+def test_cli_form_at_prefix():
+    """--form --schema @file works end-to-end through main()."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                     encoding="utf-8", delete=False) as f:
+        f.write(INLINE_SCHEMA)
+        tmp = f.name
+    try:
+        out = io.StringIO()
+        sys.stdout = out
+        rc = main(["--form", "--schema", "@" + tmp, FORM_TEXT_CLI])
+        sys.stdout = sys.__stdout__
+    finally:
+        os.unlink(tmp)
+    assert rc == 0
+    assert "test@example.com" in out.getvalue()
+
+
+def test_cli_form_nonexistent_file():
+    """--schema nonexistent.json gives a clear error (not a JSON parse error)."""
+    out = io.StringIO()
+    sys.stdout = out
+    rc = main(["--form", "--schema", "nonexistent.json", "text"])
+    sys.stdout = sys.__stdout__
+    assert rc == 1
+    output = out.getvalue()
+    assert "error" in output.lower()
+    assert "no such file" in output.lower() or "nonexistent" in output.lower()
